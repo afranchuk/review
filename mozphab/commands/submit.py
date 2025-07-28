@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import re
 from typing import List
 
 from mozphab import environment
@@ -224,6 +225,24 @@ def show_commit_stack(
 
         if show_rev_urls and commit.rev_id:
             logger.warning("-> %s/D%s", conduit.repo.phab_url, commit.rev_id)
+
+
+def check_forbidden_commits(
+    commits: List[Commit],
+):
+    """Check commits for messages matching the forbid configuration."""
+    if not config.forbid:
+        return
+
+    forbid_pattern = re.compile(config.forbid)
+
+    errors = []
+    for commit in commits:
+        if forbid_pattern.match(commit.message):
+            errors.append(f"{commit.name} {commit.title}\n- commit message matched forbid pattern")
+
+    if errors:
+        raise Error("\n\n".join(errors))
 
 
 def make_blocking(reviewers: List[str]) -> List[str]:
@@ -510,6 +529,7 @@ def _submit(repo: Repository, args: argparse.Namespace):
     show_commit_stack(commits, args, validate=True)
     try:
         with wait_message("Checking commits.."):
+            check_forbidden_commits(commits)
             repo.check_commits_for_submit(commits, require_bug=not args.no_bug)
     except Error as e:
         if not args.force:
