@@ -60,6 +60,18 @@ def amend_revision_url(body: str, new_url: str) -> str:
     return body
 
 
+def exclude_commits(
+    commits: List[Commit],
+) -> List[Commit]:
+    """Filter out commits matching the exclude configuration."""
+    if not config.exclude:
+        return commits
+
+    exclude_pattern = re.compile(config.exclude)
+
+    return [commit for commit in commits if not exclude_pattern.match(commit.message)]
+
+
 def show_commit_stack(
     commits: List[Commit],
     args: argparse.Namespace,
@@ -483,8 +495,13 @@ def _submit(repo: Repository, args: argparse.Namespace):
     # Find and preview commits to submits.
     with wait_message("Looking for commits.."):
         commits = repo.commit_stack(single=args.single)
+    
+    if commits:
+        commits = exclude_commits(commits)
+
     if not commits:
         raise Error("Failed to find any commits to submit")
+
     n_commits = len(commits)
     if n_commits > 100:
         raise Error(
